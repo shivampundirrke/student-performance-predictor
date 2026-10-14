@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Student Performance Predictor — ML Model</title>
+<style>
+:root{--ink:#1d2740;--bg:#f6f8fb;--line:#d5dcea;--ac:#0b7d80;--soft:#e3f2f2;--warn:#b4570a;--bad:#b3261e}
+*{box-sizing:border-box}body{margin:0;font:16px/1.55 system-ui,sans-serif;color:var(--ink);background:var(--bg)}
+header,main{max-width:1050px;margin:auto;padding:0 18px}header{padding-top:30px}
+h1{font:700 clamp(1.6rem,4vw,2.4rem) Georgia,serif;margin:0 0 4px}h2{font:700 1.1rem Georgia,serif;margin:0 0 12px}
+main{display:grid;grid-template-columns:1fr 1fr;gap:18px;padding-bottom:36px;margin-top:16px}
+.c{background:#fff;border:1px solid var(--line);border-radius:6px;padding:20px}.w{grid-column:1/-1}
+label{display:block;margin-bottom:12px;font-size:.9rem}output{font-weight:700;color:var(--ac)}
+input[type=range]{width:100%;accent-color:var(--ac)}
+input[type=number]{width:100%;padding:7px;border:1px solid var(--line);border-radius:4px;font:inherit}
+button{font:600 .9rem system-ui;background:var(--ac);color:#fff;border:0;border-radius:4px;padding:10px 16px;cursor:pointer;margin:0 6px 6px 0}
+button.g{background:#fff;color:var(--ac);border:1.5px solid var(--ac)}button:focus-visible,input:focus-visible{outline:3px solid #f2b200}
+#res{margin-top:12px;padding:14px;background:var(--soft);border-radius:4px}.sc{font-size:3rem;font-weight:700;line-height:1}
+.pill{display:inline-block;padding:2px 10px;border-radius:12px;font-weight:700;font-size:.85rem;color:#fff;background:var(--ac)}.pill.f{background:var(--bad)}
+.pb{height:10px;background:#fff;border-radius:5px;margin:6px 0;overflow:hidden}.pb i{display:block;height:100%;background:var(--ac)}
+.mt{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}.mt div{background:var(--bg);padding:8px;border-radius:4px;text-align:center}
+.mt b{display:block;font-size:1.25rem}.mt span{font-size:.72rem}
+canvas{width:100%;height:auto;border:1px solid var(--line);border-radius:4px;margin-top:6px}
+.eq{font:.82rem ui-monospace,monospace;background:var(--bg);padding:8px;border-radius:4px;overflow-x:auto}
+.row4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+table{border-collapse:collapse;width:100%;font-size:.85rem}td,th{border-bottom:1px solid var(--line);padding:4px 8px;text-align:right}
+.sm{font-size:.82rem;margin:6px 0}.tw{max-height:220px;overflow:auto}
+@media(max-width:760px){main{grid-template-columns:1fr}.mt{grid-template-columns:1fr 1fr}}
+</style></head><body>
+<header><h1>Student Performance Predictor</h1>
+<p>Study hours, attendance aur previous marks se final marks aur pass/fail predict karta hai. Model aapke browser me hi train hota hai.</p></header>
+<main>
+<section class="c"><h2>Prediction</h2>
+<label>Study hours per day: <output id="oH">5</output><input type="range" id="h" min="0" max="12" step="0.5" value="5"></label>
+<label>Attendance (%): <output id="oA">75</output><input type="range" id="a" min="0" max="100" value="75"></label>
+<label>Previous marks (/100): <output id="oP">60</output><input type="range" id="p" min="0" max="100" value="60"></label>
+<div id="res" aria-live="polite"><div class="sc"><span id="m">--</span><small>/100</small></div>
+<div style="margin-top:6px"><span class="pill" id="pf">--</span> <span id="pr" class="sm"></span></div>
+<div class="pb"><i id="pbar" style="width:0"></i></div><div id="gr" class="sm"></div></div></section>
+
+<section class="c"><h2>Model training</h2>
+<p class="sm">Regression (final marks) + Logistic Regression (pass/fail, pass = 40+ marks).</p>
+<button id="tr">Train model</button><button class="g" id="sp">New random split</button>
+<div class="mt"><div><b id="r2">-</b><span>R² (test)</span></div><div><b id="mae">-</b><span>MAE marks</span></div><div><b id="acc">-</b><span>Pass/Fail accuracy</span></div><div><b id="nn">-</b><span>train / test</span></div></div>
+<div class="eq" id="eq">Train karo...</div>
+<canvas id="c1" width="520" height="260"></canvas><div class="sm">Actual vs predicted marks (test data). Diagonal ke paas = sahi prediction.</div></section>
+
+<section class="c"><h2>Learning curve</h2><canvas id="c2" width="520" height="220"></canvas>
+<div class="sm">Logistic model ka loss har epoch par girta dikhta hai — yehi "learning" hai.</div>
+<p class="sm" id="imp"></p></section>
+
+<section class="c"><h2>Apna data add karo</h2>
+<div class="row4"><label>Hours<input type="number" id="nh" step="0.5" min="0" max="16"></label><label>Attendance<input type="number" id="na" min="0" max="100"></label>
+<label>Previous<input type="number" id="np" min="0" max="100"></label><label>Final<input type="number" id="nf" min="0" max="100"></label></div>
+<button id="add">Row add karo</button>
+<button class="g" id="csvb">CSV upload</button><input type="file" id="csv" accept=".csv" hidden>
+<button class="g" id="rst">Default data</button>
+<p class="sm">CSV format: <code>hours,attendance,previous,final</code> (header optional). Data badalne ke baad model auto-retrain hota hai.</p><div id="dn" class="sm"></div></section>
+
+<section class="c w"><h2>Dataset (latest 8 rows)</h2><div class="tw"><table id="tb"></table></div></section>
+</main>
+<script>
+const DEFAULT=[[4.1, 89, 72, 53], [1.7, 95, 75, 54], [5.7, 53, 27, 31], [4.8, 35, 91, 53], [8.8, 87, 98, 80], [5.6, 97, 23, 38], [0.5, 54, 45, 22], [2.9, 55, 81, 45], [2.1, 67, 78, 51], [5.9, 82, 85, 66], [9.0, 40, 47, 45], [2.6, 38, 87, 49], [6.9, 81, 28, 47], [8.6, 30, 42, 37], [1.9, 36, 75, 34], [3.8, 55, 49, 42], [3.0, 69, 57, 47], [8.3, 47, 46, 46], [6.4, 31, 22, 22], [6.1, 54, 72, 54], [4.6, 46, 68, 44], [3.8, 57, 15, 23], [2.4, 68, 17, 25], [7.7, 42, 20, 36], [8.9, 57, 71, 61], [3.0, 67, 64, 52], [0.7, 41, 41, 20], [5.4, 77, 94, 66], [4.1, 91, 88, 68], [5.6, 69, 44, 47], [7.4, 61, 39, 48], [5.0, 79, 76, 64], [5.4, 83, 21, 39], [8.7, 60, 65, 59], [2.3, 92, 52, 36], [8.8, 46, 44, 45], [4.3, 39, 50, 37], [6.7, 38, 49, 49], [3.7, 61, 22, 31], [4.8, 46, 26, 29], [3.3, 87, 57, 45], [5.3, 47, 90, 52], [0.3, 32, 75, 38], [8.7, 32, 91, 58], [5.7, 91, 23, 42], [9.0, 39, 72, 53], [4.9, 35, 31, 30], [3.2, 90, 24, 27], [7.8, 83, 18, 46], [5.6, 78, 63, 51], [5.2, 39, 25, 29], [2.3, 83, 57, 46], [3.5, 88, 71, 51], [4.7, 95, 18, 40], [2.8, 41, 76, 53], [1.0, 92, 47, 42], [8.1, 77, 53, 60], [4.7, 73, 71, 59], [4.5, 60, 56, 42], [5.7, 55, 42, 42], [3.5, 70, 41, 41], [7.5, 35, 23, 34], [8.6, 65, 36, 51], [8.3, 82, 63, 66], [5.6, 93, 55, 54], [5.6, 71, 24, 29], [7.5, 65, 92, 74], [5.1, 69, 98, 67], [7.1, 32, 97, 63], [0.2, 64, 45, 33], [7.0, 36, 95, 62], [4.8, 77, 24, 37], [6.2, 55, 75, 55], [6.8, 98, 19, 51], [1.6, 64, 59, 29], [4.5, 50, 65, 43], [7.6, 58, 26, 32], [3.5, 87, 73, 61], [1.8, 30, 63, 26], [4.5, 73, 74, 53], [2.9, 56, 27, 25], [5.8, 45, 42, 30], [2.2, 79, 26, 36], [7.1, 71, 48, 50], [8.2, 32, 59, 46], [3.1, 83, 50, 44], [4.4, 33, 42, 31], [7.2, 52, 83, 59], [3.0, 47, 75, 47], [6.5, 86, 78, 70]];
+let D=DEFAULT.map(r=>r.slice()),B=[0,0,0,0],W=[0,0,0,0],mu=[0,0,0],sd=[1,1,1],loss=[];
+const $=i=>document.getElementById(i);
+const shuf=a=>{a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
+function solve(A,b){const n=b.length,M=A.map((r,i)=>[...r,b[i]]);
+ for(let i=0;i<n;i++){let p=i;for(let r=i+1;r<n;r++)if(Math.abs(M[r][i])>Math.abs(M[p][i]))p=r;[M[i],M[p]]=[M[p],M[i]];
+  for(let r=i+1;r<n;r++){const f=M[r][i]/M[i][i];for(let c=i;c<=n;c++)M[r][c]-=f*M[i][c]}}
+ const x=Array(n).fill(0);for(let i=n-1;i>=0;i--){let s=M[i][n];for(let c=i+1;c<n;c++)s-=M[i][c]*x[c];x[i]=s/M[i][i]}return x}
+function linFit(rows){const X=rows.map(r=>[1,r[0],r[1],r[2]]),y=rows.map(r=>r[3]);
+ const A=[0,1,2,3].map(i=>[0,1,2,3].map(j=>X.reduce((s,r)=>s+r[i]*r[j],0)));
+ return solve(A,[0,1,2,3].map(i=>X.reduce((s,r,n)=>s+r[i]*y[n],0)))}
+const clamp=v=>Math.max(0,Math.min(100,v));
+const lin=(h,a,p)=>clamp(B[0]+B[1]*h+B[2]*a+B[3]*p);
+const z=(h,a,p)=>[h,a,p].map((v,i)=>(v-mu[i])/sd[i]);
+const sig=x=>1/(1+Math.exp(-x));
+const prob=(h,a,p)=>{const f=z(h,a,p);return sig(W[0]+W[1]*f[0]+W[2]*f[1]+W[3]*f[2])};
+function logFit(rows,epochs=600,lr=0.3){
+ mu=[0,1,2].map(i=>rows.reduce((s,r)=>s+r[i],0)/rows.length);
+ sd=[0,1,2].map(i=>Math.sqrt(rows.reduce((s,r)=>s+(r[i]-mu[i])**2,0)/rows.length)||1);
+ W=[0,0,0,0];loss=[];const n=rows.length;
+ const X=rows.map(r=>[1,...z(r[0],r[1],r[2])]),y=rows.map(r=>r[3]>=40?1:0);
+ for(let e=0;e<epochs;e++){const g=[0,0,0,0];let L=0;
+  X.forEach((x,k)=>{const p=sig(x.reduce((s,v,i)=>s+v*W[i],0));L-=y[k]*Math.log(p+1e-9)+(1-y[k])*Math.log(1-p+1e-9);
+   for(let i=0;i<4;i++)g[i]+=(p-y[k])*x[i]});
+  for(let i=0;i<4;i++)W[i]-=lr*g[i]/n;loss.push(L/n)}}
+function plot(cv,fn){const c=$(cv),g=c.getContext('2d');g.clearRect(0,0,c.width,c.height);g.font='12px system-ui';fn(g,c.width,c.height)}
+function train(){
+ if(D.length<8){$('dn').textContent='Kam se kam 8 rows chahiye.';return}
+ const d=shuf(D),cut=Math.max(4,Math.floor(d.length*.8)),tr=d.slice(0,cut),te=d.slice(cut);
+ B=linFit(tr);logFit(tr);
+ const y=te.map(r=>r[3]),pr=te.map(r=>lin(r[0],r[1],r[2])),mean=y.reduce((s,v)=>s+v,0)/y.length;
+ const r2=1-y.reduce((s,v,i)=>s+(v-pr[i])**2,0)/y.reduce((s,v)=>s+(v-mean)**2,0);
+ const mae=y.reduce((s,v,i)=>s+Math.abs(v-pr[i]),0)/y.length;
+ const acc=te.filter(r=>(prob(r[0],r[1],r[2])>=.5)===(r[3]>=40)).length/te.length;
+ $('r2').textContent=r2.toFixed(3);$('mae').textContent=mae.toFixed(2);$('acc').textContent=(acc*100).toFixed(0)+'%';$('nn').textContent=tr.length+' / '+te.length;
+ const f=v=>(v<0?'- ':'+ ')+Math.abs(v).toFixed(2);
+ $('eq').textContent=`marks = ${B[0].toFixed(2)} ${f(B[1])}×hours ${f(B[2])}×attendance ${f(B[3])}×previous`;
+ const imp=[['Study hours',Math.abs(W[1])],['Attendance',Math.abs(W[2])],['Previous marks',Math.abs(W[3])]].sort((a,b)=>b[1]-a[1]);
+ $('imp').innerHTML='<b>Pass/Fail ke liye sabse important:</b> '+imp.map(x=>x[0]).join(' > ');
+ plot('c1',(g,W_,H)=>{const m=36,sx=v=>m+v/100*(W_-m-12),sy=v=>H-m-v/100*(H-m-12);g.strokeStyle='#d5dcea';g.fillStyle='#1d2740';
+  for(let t=0;t<=100;t+=20){g.beginPath();g.moveTo(sx(t),sy(0));g.lineTo(sx(t),sy(100));g.moveTo(sx(0),sy(t));g.lineTo(sx(100),sy(t));g.stroke();g.fillText(t,sx(t)-7,H-m+14);g.fillText(t,6,sy(t)+4)}
+  g.fillText('Actual',W_/2-15,H-6);g.strokeStyle='#b4570a';g.setLineDash([6,4]);g.beginPath();g.moveTo(sx(0),sy(0));g.lineTo(sx(100),sy(100));g.stroke();g.setLineDash([]);
+  g.fillStyle='#0b7d80';y.forEach((v,i)=>{g.beginPath();g.arc(sx(v),sy(pr[i]),4.5,0,7);g.fill()})});
+ plot('c2',(g,W_,H)=>{const m=40,mx=Math.max(...loss),n=loss.length,sx=i=>m+i/(n-1)*(W_-m-12),sy=v=>H-28-v/mx*(H-48);
+  g.strokeStyle='#0b7d80';g.lineWidth=2;g.beginPath();loss.forEach((v,i)=>i?g.lineTo(sx(i),sy(v)):g.moveTo(sx(i),sy(v)));g.stroke();g.lineWidth=1;
+  g.fillStyle='#1d2740';g.fillText('loss '+mx.toFixed(2),4,16);g.fillText(loss[n-1].toFixed(3),4,sy(loss[n-1])-4);g.fillText('epochs →',W_/2-20,H-6)});
+ show();table()}
+function grade(m){return m>=85?'Grade A — Excellent!':m>=70?'Grade B — Good, thodi aur mehnat se A.':m>=55?'Grade C — Study hours aur attendance badhao.':m>=40?'Grade D — Pass, par risk zone me.':'Fail zone — study plan banao aur class attend karo.'}
+function show(){const h=+$('h').value,a=+$('a').value,p=+$('p').value,mk=lin(h,a,p),pb=prob(h,a,p);
+ $('m').textContent=mk.toFixed(1);$('gr').textContent=grade(mk);$('pbar').style.width=pb*100+'%';
+ $('pf').textContent=pb>=.5?'PASS':'FAIL RISK';$('pf').className='pill'+(pb>=.5?'':' f');$('pr').textContent='Pass probability: '+(pb*100).toFixed(0)+'%'}
+function table(){$('tb').innerHTML='<tr><th>Hours</th><th>Attendance</th><th>Previous</th><th>Final</th></tr>'+D.slice(-8).reverse().map(r=>'<tr>'+r.map(v=>'<td>'+v+'</td>').join('')+'</tr>').join('');$('dn').textContent='Total rows: '+D.length}
+[['h','oH'],['a','oA'],['p','oP']].forEach(([i,o])=>$(i).addEventListener('input',()=>{$(o).textContent=$(i).value;show()}));
+$('tr').onclick=train;$('sp').onclick=train;
+$('add').onclick=()=>{const r=['nh','na','np','nf'].map(i=>parseFloat($(i).value));
+ if(r.some(isNaN)||r[1]>100||r[2]>100||r[3]>100||r.some(v=>v<0)){$('dn').textContent='Sab 4 values sahi range me daalo (0–100, hours 0–16).';return}
+ D.push(r);['nh','na','np','nf'].forEach(i=>$(i).value='');train()};
+$('csvb').onclick=()=>$('csv').click();
+$('csv').onchange=e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{
+ const rows=rd.result.split(/\r?\n/).map(l=>l.split(',').map(parseFloat)).filter(r=>r.length>=4&&r.slice(0,4).every(v=>!isNaN(v)));
+ if(rows.length<8){$('dn').textContent='CSV me kam se kam 8 valid rows chahiye (4 columns).';return}
+ D=rows.map(r=>r.slice(0,4));train()};rd.readAsText(f)};
+$('rst').onclick=()=>{D=DEFAULT.map(r=>r.slice());train()};
+train();
+</script></body></html>
